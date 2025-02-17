@@ -1,102 +1,152 @@
----
-# Runs pytest in several environments including several Python and dependencies versions as well as on different systems.
-# All environments are defined in `tox.ini <https://github.com/nilearn/nilearn/blob/main/tox.ini>`_.
-#
-# .. admonition:: Control via commit message
-#    :class: tip
-#
-#    This workflow can be controlled if your commit message contains:
-#
-#    - ``[skip test]`` skip this workflow.
-#
-###
 name: test
-
 on:
-    push:
-        branches:
-        -   main
-    pull_request:
-        branches:
-        -   '*'
+  push:
+    branches:
+      - main
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
-
-# Force to use color
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
 env:
-    FORCE_COLOR: true
-
+  FORCE_COLOR: true
 jobs:
-
-    check_skip_flags:
-        name: Check skip flags
-        runs-on: ubuntu-latest
-        steps:
-        -   name: Get repo
-            uses: actions/checkout@v4
-            with:
-                ref: ${{ github.event.pull_request.head.sha }}
-        -   name: Check head git commit message
-            run: |
-                headCommitMsg=$(git show -s --format=%s)
-                if [[ $headCommitMsg == *"[skip test]"* ]]; then
-                    echo "skipping tests"
-                    exit 1
-                fi
-
-    test_and_coverage:
-        needs: check_skip_flags
-        if: github.repository == 'nilearn/nilearn'
-        name: 'Test with ${{ matrix.py }} on ${{ matrix.os }}: ${{ matrix.description }}'
-        runs-on: ${{ matrix.os }}
-        strategy:
-            fail-fast: true
-            matrix:
-                description: [latest dependencies]
-                py: ['3.13', '3.12', '3.11', '3.10', '3.9']
-                os: [ubuntu-latest, macos-latest, windows-latest]
-                env: [plotting]
-                include:
-                -   description: pre-release dependencies
-                    py: '3.13'
-                    os: ubuntu-latest
-                    env: pre
-                # Using macos on the following as tests run faster on macos.
-                # As 'no plotting' run fewer tests, this allows to fail event faster if using macos.
-                -   description: oldest dependencies - no plotting
-                    py: '3.9'
-                    os: macos-latest
-                    env: min
-                -   description: oldest dependencies - no plotly
-                    py: '3.9'
-                    os: macos-latest
-                    env: plot_min
-        steps:
-        -   uses: actions/checkout@v4
-        -   name: Install the latest version of uv
-            uses: astral-sh/setup-uv@v5
-        -   name: Setup python
-            uses: actions/setup-python@v5
-            with:
-                python-version: ${{ matrix.py }}
-                allow-prereleases: true
-        -   name: Install tox
-            run: uv tool install tox --with=tox-uv --with=tox-gh-actions
-        -   name: Show tox config
-            run: tox c
-        -   name: Run test suite
-            run: tox run --list-dependencies -e ${{ matrix.env }} -- nilearn
-        -   name: Upload test report
-            if: success() || failure()
-            uses: actions/upload-artifact@v4
-            with:
-                name: ${{ matrix.os }}_${{ matrix.py }}_${{ matrix.description }}_report.html
-                path: report.html
-        -   name: Upload coverage to CodeCov
-            uses: codecov/codecov-action@v5
-            with:
-                flags: ${{ matrix.os }}_${{ matrix.py }}_${{ matrix.env }}
-                token: ${{ secrets.CODECOV_TOKEN }}
-            if: success()
+  check_skip_flags:
+    name: Check skip flags
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
+      - name: Get repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check head git commit message
+        run: "headCommitMsg=$(git show -s --format=%s)\nif [[ $headCommitMsg == *\"\
+          [skip test]\"* ]]; then\n    echo \"skipping tests\"\n    exit 1\nfi\n"
+      - id: measurement-3
+        name: Record Measurement After Check head git commit message
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Check head git commit message
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption-${{
+          github.run_id }}.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption-${{ github.run_id }}.json
+  test_and_coverage:
+    if: github.repository == 'nilearn/nilearn'
+    name: 'Test with ${{ matrix.py }} on ${{ matrix.os }}: ${{ matrix.description
+      }}'
+    needs: check_skip_flags
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
+      - uses: actions/checkout@v4
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v5
+      - name: Setup python
+        uses: actions/setup-python@v5
+        with:
+          allow-prereleases: true
+          python-version: ${{ matrix.py }}
+      - name: Install tox
+        run: uv tool install tox --with=tox-uv --with=tox-gh-actions
+      - id: measurement-5
+        name: Record Measurement After Install tox
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Install tox
+          task: get-measurement
+      - name: Show tox config
+        run: tox c
+      - id: measurement-7
+        name: Record Measurement After Show tox config
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Show tox config
+          task: get-measurement
+      - name: Run test suite
+        run: tox run --list-dependencies -e ${{ matrix.env }} -- nilearn
+      - id: measurement-9
+        name: Record Measurement After Run test suite
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Run test suite
+          task: get-measurement
+      - if: success() || failure()
+        name: Upload test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}_${{ matrix.py }}_${{ matrix.description }}_report.html
+          path: report.html
+      - if: success()
+        name: Upload coverage to CodeCov
+        uses: codecov/codecov-action@v5
+        with:
+          flags: ${{ matrix.os }}_${{ matrix.py }}_${{ matrix.env }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption-${{
+          github.run_id }}.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption-${{ github.run_id }}.json
+    strategy:
+      fail-fast: true
+      matrix:
+        description:
+          - latest dependencies
+        env:
+          - plotting
+        include:
+          - description: pre-release dependencies
+            env: pre
+            os: ubuntu-latest
+            py: '3.13'
+          - description: oldest dependencies - no plotting
+            env: min
+            os: macos-latest
+            py: '3.9'
+          - description: oldest dependencies - no plotly
+            env: plot_min
+            os: macos-latest
+            py: '3.9'
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        py:
+          - '3.13'
+          - '3.12'
+          - '3.11'
+          - '3.10'
+          - '3.9'

@@ -1,26 +1,53 @@
----
-# Allows anyone to self-assign an issue automatically by commenting the word `take` on any issue.
-#
-# .. seealso::
-#
-#   Adapted from `Scikit-learn <https://github.com/scikit-learn/scikit-learn/blob/main/.github/workflows/assign.yml>`_.
-#
-###
 name: Assign
 on:
-    issue_comment:
-        types: created
+  push:
+    branches:
+      - master
 
 jobs:
-    one:
-        runs-on: ubuntu-latest
-        if: >-
-            (github.event.comment.body == 'take' ||
-             github.event.comment.body == 'Take')
-            && !github.event.issue.assignee
-        steps:
-        -   name: Assign issue
-            run: |
-                echo "Assigning issue ${{ github.event.issue.number }} to ${{ github.event.comment.user.login }}"
-                curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d '{"assignees": ["${{ github.event.comment.user.login }}"]}' https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/assignees
-                curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -X "DELETE" https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/labels/help%20wanted
+  one:
+    if:
+      "(github.event.comment.body == 'take' ||\n github.event.comment.body == 'Take')\n\
+      && !github.event.issue.assignee"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
+      - name: Assign issue
+        run:
+          'echo "Assigning issue ${{ github.event.issue.number }} to ${{ github.event.comment.user.login
+          }}"
+
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d ''{"assignees":
+          ["${{ github.event.comment.user.login }}"]}'' https://api.github.com/repos/${{
+          github.repository }}/issues/${{ github.event.issue.number }}/assignees
+
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -X "DELETE" https://api.github.com/repos/${{
+          github.repository }}/issues/${{ github.event.issue.number }}/labels/help%20wanted
+
+          '
+      - id: measurement-2
+        name: Record Measurement After Assign issue
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Assign issue
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run:
+          echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption-${{
+          github.run_id }}.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption-${{ github.run_id }}.json
